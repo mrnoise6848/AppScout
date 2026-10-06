@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      Toolchain versions are frozen for this project (Gradle 9.8.0, AGP 9.4.1, Kotlin 2.4.0,
+      Compose BOM 2026.09.00). Newer-version hints are therefore not actionable during MVP
+      development and only add noise to the report.
+    -->
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <!-- Same reason: dependency upgrades are out of scope while the toolchain is frozen. -->
+    <issue id="GradleDependency" severity="ignore" />
+</lint>

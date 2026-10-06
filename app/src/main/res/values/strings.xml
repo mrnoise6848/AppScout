@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AppScout</string>
+
+    <!-- Notifications (created by core/notification/NotificationChannels) -->
+    <string name="notification_channel_updates">Release updates</string>
+    <string name="notification_channel_updates_description">Notifies when a tracked app gets a new GitHub release.</string>
+
+    <!-- Generic actions -->
+    <string name="action_back">Back</string>
+    <string name="action_add_app">Add app</string>
+
+    <!-- Home -->
+    <string name="home_title">AppScout</string>
+    <plurals name="home_updates_count">
+        <item quantity="zero">No updates available</item>
+        <item quantity="one">1 update available</item>
+        <item quantity="other">%d updates available</item>
+    </plurals>
+    <string name="home_section_up_to_date">Up to date</string>
+    <string name="home_section_needs_attention">Needs attention</string>
+    <string name="home_empty_title">No tracked apps yet.</string>
+    <string name="home_empty_body">Add an app to start monitoring releases.</string>
+    <string name="home_offline_notice">Showing cached data — could not refresh.</string>
+
+    <!-- Release status -->
+    <string name="status_update_available">Update available</string>
+    <string name="status_up_to_date">Up to date</string>
+    <string name="status_version_uncertain">Can\'t compare versions</string>
+    <string name="status_source_error">Source problem</string>
+    <string name="status_not_installed">Not installed</string>
+    <string name="status_stale">Last check failed</string>
+    <string name="version_latest">Latest: %1$s</string>
+    <string name="version_change">Installed %1$s → latest %2$s</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_notifications">New release notifications</string>
+    <string name="settings_notifications_description">Get notified when a tracked app publishes a new release.</string>
+    <string name="settings_section_refresh">Refresh</string>
+    <string name="settings_background_refresh">Background refresh</string>
+    <string name="settings_background_refresh_description">Check GitHub for new releases about every 12 hours.</string>
+    <string name="settings_include_prereleases">Include pre-releases</string>
+    <string name="settings_include_prereleases_description">Treat pre-releases as candidates for the latest version.</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_clear_cache">Clear cached release data</string>
+    <string name="settings_clear_cache_description">Removes cached release notes, statuses and AI summaries.</string>
+    <string name="settings_clear_cache_done">Cached release data cleared.</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <!-- Accessibility -->
+    <string name="cd_open_settings">Open settings</string>
+</resources>

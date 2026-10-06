@@ -1,0 +1,17 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+
+# Signing & secrets — never committed
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+.env
