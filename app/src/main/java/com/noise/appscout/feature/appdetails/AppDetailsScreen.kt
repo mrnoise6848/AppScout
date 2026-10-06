@@ -1,6 +1,7 @@
 package com.noise.appscout.feature.appdetails
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -82,6 +85,7 @@ fun AppDetailsScreen(
 ) {
     var showStopDialog by remember { mutableStateOf(false) }
     val formatDate = rememberDateFormatter()
+    val loadingDescription = stringResource(R.string.cd_checking_for_updates)
     val status = state.status
 
     Scaffold(
@@ -118,7 +122,18 @@ fun AppDetailsScreen(
         },
     ) { innerPadding ->
         if (status == null) {
-            // Tracked app vanished (stopped elsewhere) — close the screen.
+            if (state.isLoading) {
+                // Room has not answered yet: show a loading state instead of flashing/leaving.
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.semantics {
+                            contentDescription = loadingDescription
+                        },
+                    )
+                }
+                return@Scaffold
+            }
+            // Data is loaded and the tracked app is really gone (stopped elsewhere) — leave.
             LaunchedEffect(Unit) { onBack() }
             return@Scaffold
         }

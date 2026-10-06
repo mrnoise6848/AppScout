@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.noise.appscout.core.common.TimeProvider
 import com.noise.appscout.core.ui.navigation.Routes
 import com.noise.appscout.domain.usecase.ObserveTrackedAppStatusesUseCase
 import com.noise.appscout.domain.usecase.RefreshAppUseCase
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -33,6 +35,7 @@ class AppDetailsViewModel @Inject constructor(
     observeStatuses: ObserveTrackedAppStatusesUseCase,
     private val refreshApp: RefreshAppUseCase,
     private val stopTracking: StopTrackingUseCase,
+    private val timeProvider: TimeProvider,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.AppDetails>()
@@ -53,7 +56,21 @@ class AppDetailsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppDetailsUiState())
 
     init {
-        refresh()
+        autoRefreshIfStale()
+    }
+
+    /**
+     * Opens from cache instantly and only goes to the network when the cached check is missing
+     * or older than [AUTO_REFRESH_AFTER_MS]; otherwise every tap would visibly re-run the screen.
+     * "Check now" always forces a refresh.
+     */
+    private fun autoRefreshIfStale() {
+        viewModelScope.launch {
+            val firstKnown = state.first { !it.isLoading }
+            val checkedAt = firstKnown.status?.check?.checkedAt
+            val isStale = checkedAt == null || timeProvider.nowMillis() - checkedAt >= AUTO_REFRESH_AFTER_MS
+            if (isStale) refresh()
+        }
     }
 
     fun refresh() {
@@ -70,6 +87,10 @@ class AppDetailsViewModel @Inject constructor(
                 isRefreshing.value = false
             }
         }
+    }
+
+    private companion object {
+        const val AUTO_REFRESH_AFTER_MS = 30 * 60 * 1000L
     }
 
     fun onStopTrackingConfirmed() {

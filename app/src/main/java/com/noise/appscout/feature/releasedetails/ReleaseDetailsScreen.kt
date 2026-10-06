@@ -1,6 +1,7 @@
 package com.noise.appscout.feature.releasedetails
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -66,6 +69,7 @@ fun ReleaseDetailsScreen(
 ) {
     val context = LocalContext.current
     val formatDate = rememberDateFormatter()
+    val loadingDescription = stringResource(R.string.ai_loading)
     val release = state.release
 
     Scaffold(
@@ -92,6 +96,15 @@ fun ReleaseDetailsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (release == null && state.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.semantics { contentDescription = loadingDescription },
+                    )
+                }
+                return@Column
+            }
+
             if (release == null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
