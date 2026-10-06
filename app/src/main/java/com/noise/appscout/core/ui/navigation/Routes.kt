@@ -10,7 +10,10 @@ sealed interface Routes {
     data object Home : Routes
 
     @Serializable
-    data object AddApp : Routes
+    data object SelectInstalledApp : Routes
+
+    @Serializable
+    data class AddApp(val packageName: String) : Routes
 
     @Serializable
     data class AppDetails(val trackedAppId: String) : Routes

@@ -51,4 +51,29 @@ abstract class RepositoryModule {
     abstract fun bindSourceUrlParser(
         impl: GitHubSourceUrlParser,
     ): SourceUrlParser
+
+    @Binds
+    @Singleton
+    abstract fun bindReleaseNotifier(
+        impl: com.noise.appscout.core.notification.AndroidReleaseNotifier,
+    ): com.noise.appscout.domain.service.ReleaseNotifier
+
+    @Binds
+    @Singleton
+    abstract fun bindAiSummaryRepository(
+        impl: com.noise.appscout.data.repository.AiSummaryRepositoryImpl,
+    ): com.noise.appscout.domain.repository.AiSummaryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiApiKeyProvider(
+        impl: com.noise.appscout.core.security.ApiKeyVault,
+    ): com.noise.appscout.domain.ai.AiApiKeyProvider
+
+    /** The only production AI implementation; tests substitute a fake at construction time. */
+    @Binds
+    @Singleton
+    abstract fun bindAiSummaryProvider(
+        impl: com.noise.appscout.data.remote.gemini.GeminiAiSummaryProvider,
+    ): com.noise.appscout.domain.ai.AiSummaryProvider
 }

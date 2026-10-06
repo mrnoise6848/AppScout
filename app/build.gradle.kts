@@ -45,6 +45,9 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Android framework stubs (android.util.Log, ...) return defaults in JVM tests so
+            // libraries such as WorkManager can be exercised without Robolectric.
+            isReturnDefaultValues = true
         }
     }
     lint {
@@ -98,6 +101,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver3)
+    // okhttp exposes okio at runtime only; tests use it to read MockWebServer request bodies.
+    testImplementation(libs.okio)
 
     // Instrumented tests
     androidTestImplementation(platform(libs.androidx.compose.bom))

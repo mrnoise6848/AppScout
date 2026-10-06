@@ -2,6 +2,7 @@ package com.noise.appscout.di
 
 import com.noise.appscout.core.network.HttpClients
 import com.noise.appscout.core.network.NetworkConfig
+import com.noise.appscout.data.remote.gemini.GeminiApi
 import com.noise.appscout.data.remote.github.GitHubApi
 import dagger.Module
 import dagger.Provides
@@ -31,15 +32,31 @@ object NetworkModule {
     fun provideOkHttpClient(): OkHttpClient =
         HttpClients.okHttpClient(HttpClients.githubInterceptors())
 
+    @GitHubRetrofit
     @Provides
     @Singleton
-    fun provideRetrofit(client: OkHttpClient, json: Json): Retrofit = Retrofit.Builder()
+    fun provideGitHubRetrofit(client: OkHttpClient, json: Json): Retrofit = Retrofit.Builder()
         .baseUrl(NetworkConfig.GITHUB_BASE_URL)
+        .client(client)
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
+
+    @GeminiRetrofit
+    @Provides
+    @Singleton
+    fun provideGeminiRetrofit(client: OkHttpClient, json: Json): Retrofit = Retrofit.Builder()
+        .baseUrl(NetworkConfig.GEMINI_BASE_URL)
         .client(client)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
 
     @Provides
     @Singleton
-    fun provideGitHubApi(retrofit: Retrofit): GitHubApi = retrofit.create(GitHubApi::class.java)
+    fun provideGitHubApi(@GitHubRetrofit retrofit: Retrofit): GitHubApi =
+        retrofit.create(GitHubApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideGeminiApi(@GeminiRetrofit retrofit: Retrofit): GeminiApi =
+        retrofit.create(GeminiApi::class.java)
 }

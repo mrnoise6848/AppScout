@@ -56,10 +56,10 @@ object ReleaseStatusResolver {
 
         val status = when (VersionComparator.compare(installedVersion, release.tagName)) {
             VersionComparison.UNCERTAIN -> ReleaseStatus.VERSION_COMPARISON_UNCERTAIN
-            // The release is at least as new as what is installed.
-            VersionComparison.GREATER -> ReleaseStatus.UPDATE_AVAILABLE
+            // The installed version is older than the published release.
+            VersionComparison.LOWER -> ReleaseStatus.UPDATE_AVAILABLE
             // Up to date, or the installed build is newer than the published one.
-            VersionComparison.EQUAL, VersionComparison.LOWER -> ReleaseStatus.UP_TO_DATE
+            VersionComparison.EQUAL, VersionComparison.GREATER -> ReleaseStatus.UP_TO_DATE
         }
 
         return ReleaseCheck(

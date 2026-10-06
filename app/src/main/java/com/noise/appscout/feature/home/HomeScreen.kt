@@ -99,11 +99,10 @@ fun HomeScreen(
 
 @Composable
 private fun LoadingState(modifier: Modifier = Modifier) {
+    val loadingDescription = stringResource(R.string.cd_checking_for_updates)
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
-            modifier = Modifier.semantics {
-                contentDescription = "Checking for updates"
-            },
+            modifier = Modifier.semantics { contentDescription = loadingDescription },
         )
     }
 }
