@@ -1,151 +1,70 @@
 # AppScout
 
-> **Know what changed before you update.**
+**Understand whether an installed Android app has a newer GitHub release, and what changed, without losing the last-known answer offline.**
 
-## The Problem
+For apps installed outside a managed store, checking updates often means finding the right repository, comparing an installed version with a release tag and reading unfamiliar release notes. A newer-looking tag alone does not explain whether a change deserves attention—and some version formats cannot be compared safely.
 
-People install Android apps from multiple sources — F-Droid, GitHub, a friend's build, a link in a
-forum thread — and then keep using whatever version they happen to have. When a new release shows
-up, nobody knows:
+AppScout links a selected launcher app to a GitHub repository, caches release information and exposes both the version decision and its uncertainty. Optional AI summaries help interpret the notes; the official release remains available for review. The app does not download or install updates.
 
-* is it actually newer than what I have?
-* is it just bug fixes, or something I should care about?
-* is it a security fix I should not postpone?
-* should I even bother opening the release page?
+## The update-review workflow
 
-Release notes are written for people who already follow the project. For everyone else, the answer
-is "no idea".
+1. Select an installed launcher app and attach its GitHub repository.
+2. Refresh to compare the installed version with the published release.
+3. Read release details, or request a clearly labelled Gemini summary using your own key.
+4. Open the official release in the browser to decide what to do.
+5. Return offline: cached details remain readable, with failed checks marked stale.
 
-## The Solution
+## A useful answer includes uncertainty
 
-AppScout watches the Android apps you already have installed, checks the GitHub repository you
-attach to each one, and tells you — plainly — whether an update is waiting and what it contains.
+| Situation | Implemented behavior |
+|---|---|
+| Versions parse successfully | Compare numeric components and prerelease identifiers |
+| Either version cannot be parsed | Report `VERSION_COMPARISON_UNCERTAIN` |
+| A refresh fails | Preserve cached information and mark the decision stale |
+| GitHub returns HTTP 304 | Reuse the cached release through ETag revalidation |
+| Latest-release lookup cannot provide an eligible release | Fall back to the release list and filter drafts/prereleases |
+| A release was already notified | Deduplicate notifications by release tag |
 
-* Pick an installed app from a list (no `QUERY_ALL_PACKAGES`, no scanning everything).
-* Attach its GitHub repository once.
-* AppScout keeps track of installed vs. published versions and caches every release locally.
-* Optional AI summaries turn raw release notes into a short, clearly-labelled, advisory summary —
-  only if you supply your own Gemini API key.
+This separation matters: “no update,” “could not compare” and “could not refresh” are different answers. See the [version comparator](app/src/main/java/com/noise/appscout/domain/version/VersionComparator.kt), [status resolver](app/src/main/java/com/noise/appscout/domain/release/ReleaseStatusResolver.kt) and [GitHub boundary](app/src/main/java/com/noise/appscout/data/remote/github/GitHubReleaseDataSource.kt).
 
-It does **not** download or install anything for you. It does not scrape websites. It does not
-phone home to a server of ours: there is no backend at all. When you are offline, everything you
-already saw stays readable.
+## One cache, two refresh paths
 
-## Demo
-
-End-to-end flow the MVP supports:
-
-```text
-1. Launch AppScout
-2. Select an installed app
-3. Attach a GitHub repository
-4. Fetch the latest release
-5. Compare installed vs. latest version
-6. See UPDATE_AVAILABLE on the dashboard
-7. Open release details
-8. Generate an AI summary (optional, BYOK)
-9. See importance and reasons, labelled AI-generated
-10. Open the official GitHub release in the browser
-11. Disable the network
-12. Reopen AppScout
-13. Cached release information is still there (marked as last-known state)
+```mermaid
+flowchart LR
+    UI[Foreground refresh] --> UseCases[Domain use cases]
+    Worker[WorkManager refresh] --> UseCases
+    UseCases --> GitHub[GitHub REST]
+    GitHub --> Room[Room release cache]
+    Room --> State[Observed UI state]
+    Room --> Notify[Notification decisions]
 ```
 
-> Screenshots and a demo GIF are not included in this repository yet; see
-> [Known limitations](#roadmap).
+Compose screens observe local state rather than rendering network responses directly. Room persists tracked sources and releases; DataStore holds settings. WorkManager submits unique, network-constrained periodic work with a 12-hour interval and `KEEP` policy. Android controls actual execution time. Shared use cases keep foreground and background refresh behavior aligned.
 
-## Features
+Details: [architecture](docs/architecture.md) · [decisions](docs/decisions/).
 
-| Feature | Details |
-| --- | --- |
-| Installed-app picker | Launcher apps only, with name, package, version and icon |
-| GitHub sources | URL parser + `GET /repos/{owner}/{repo}/releases` with ETag revalidation |
-| Version intelligence | Prefix-tolerant normalization, semver-style ordering, prerelease filtering |
-| Honest uncertainty | Uncomparable versions report `VERSION_COMPARISON_UNCERTAIN`, never a fake update |
-| Offline-first | Room is the single source of truth; failed refreshes keep the cache and are flagged stale |
-| Background refresh | WorkManager, unique periodic work (12 h), network constraint, `KEEP` policy |
-| Notifications | Posted once per release tag, honour the notification setting, tap opens the app |
-| AI summaries | Optional, bring-your-own-key Gemini, structured JSON, validated output, advisory only |
-| Accessibility | Content descriptions, labelled status pills (never colour alone), 48 dp targets |
+## Optional AI: advisory, with bounded validation
 
-## Architecture
+Gemini receives the app name and supplied release text when summaries are requested. Output is parsed as structured JSON, bounded in size and mapped to explicit failure states. A keyword check removes unsupported security-related reasons and clears the security flag when the notes lack matching terms.
 
-Lightweight Clean Architecture with a strict dependency direction:
+That check is a heuristic, **not semantic verification**: it does not prove the summary is accurate, and the summary text itself is retained. Readers should consult the original release notes. The provider and model identifier are configured in [GeminiAiSummaryProvider](app/src/main/java/com/noise/appscout/data/remote/gemini/GeminiAiSummaryProvider.kt); service/model availability is a runtime dependency.
 
-```text
-Presentation (Compose, ViewModel, StateFlow/UDF)
-        ↓ depends on
-Domain (models, use cases, repository interfaces, version logic)
-        ↓ implemented by
-Data (Room, Retrofit/GitHub+Gemini, PackageManager, DataStore)  +  core/ (Hilt modules, notifications)
-```
+The key is encrypted using Android Keystore-backed storage. Core tracking requires no Gemini key. There is no application backend or analytics integration; GitHub checks and optional Gemini requests use network services.
 
-* Screens are **stateless composables** fed by a thin `…Route` wrapper → previews and UI tests need
-  no DI.
-* `ViewModel` exposes `StateFlow<UiState>`; every user intent is a function, every state is data.
-* Room is the only source of truth; network results are written first, then observed.
-* Background work calls the *same* use cases as the foreground, so behaviour cannot drift.
+## Run and verify
 
-Full write-up: [`docs/architecture.md`](docs/architecture.md) · Decision records:
-[`docs/decisions/`](docs/decisions).
-
-## Technology
-
-| Area | Choice |
-| --- | --- |
-| UI | Jetpack Compose + Material 3 (Compose BOM `2026.09.00`) |
-| Language / build | Kotlin 2.4.0, AGP 9.4.1, Gradle 9.8.0, Java 11 bytecode |
-| DI | Hilt |
-| Persistence | Room (exported schemas) + DataStore for settings |
-| Networking | Retrofit 3 + OkHttp 5 + kotlinx.serialization; GitHub REST only |
-| Background | WorkManager 2.12 |
-| Navigation | Navigation Compose (type-safe routes) |
-| AI | Google Gemini `generateContent` (structured JSON), optional |
-| CI | GitHub Actions → `lint`, `test`, `assembleDebug` |
-
-## Privacy
-
-* No backend, no analytics, no third-party SDKs.
-* Only two network destinations exist: `api.github.com` and, if you enable AI and provide a key,
-  `generativelanguage.googleapis.com`.
-* Your Gemini API key is stored **encrypted with the Android Keystore** on the device, never in the
-  repository, never in logs. Remove it at any time from Settings.
-* AppScout reads the list of launcher apps and their versions. It does **not** request
-  `QUERY_ALL_PACKAGES`, never reads app contents, and never installs packages.
-
-## Testing
+Use Android Studio and the versions declared in the Gradle files:
 
 ```bash
 ./gradlew lint test assembleDebug
 ```
 
-86 JVM unit tests cover every layer:
+Existing JVM tests cover URL parsing, HTTP/cache responses, version uncertainty, notification deduplication, scheduling and AI output validation. [The instrumented acceptance test](app/src/androidTest/java/com/noise/appscout/TrackRealRepositoryTest.kt) needs a device and access to a public repository. Test presence is not a claim that those checks were rerun during this documentation pass.
 
-* `GitHubSourceUrlParserTest` — accepted/rejected source URLs
-* `GitHubReleaseDataSourceTest` — ETag/304, 404, rate limit, retry policy, malformed payloads
-* `VersionParserTest` / `VersionComparatorTest` / `ReleaseStatusResolverTest` — normalization,
-  ordering, prereleases, uncertain comparisons, stale-but-cached offline decisions
-* `EntityMappersTest` — release/source cache round-trips
-* `TrackAppUseCaseTest` — attach a source, nothing persisted on failure
-* `RefreshTrackedAppsUseCaseTest` — background pipeline: success keeps cache, offline keeps cache
-* `NotifyNewReleasesUseCaseTest` — notify once per tag, settings honoured
-* `RefreshSchedulerTest` — unique work name + `KEEP` policy ⇒ no duplicate periodic work
-* `GeminiAiSummaryProviderTest` — HTTP boundary: valid/malformed output, key errors, rate limits,
-  evidence constraint (unsupported security claims are dropped)
-* `GenerateAiSummaryUseCaseTest` — cached vs. generated, AI disabled, graceful failure
+Existing [home-screen capture](phase2_home.png) shows the empty initial state; it does not demonstrate release comparison. A populated release-detail screenshot or end-to-end recording remains a presentation gap.
 
-Instrumented tests (`./gradlew connectedDebugAndroidTest`) include an end-to-end acceptance test
-that attaches a real public repository to a real installed app; they run when a device or emulator
-is available (also wired into CI when one is).
+## Scope and limits
 
-## Roadmap
+Launcher apps must be linked manually to repositories. Arbitrary download sites, automatic installation and a complete release-history browser are outside this workflow. Unusual version schemes remain uncertain; cached information can be outdated; prerelease inclusion does not guarantee discovery of the newest prerelease when the latest-release endpoint already returns an eligible stable release.
 
-* Screenshots / demo GIF
-* Instrumented UI tests in CI once an emulator runner is available
-* Per-app refresh interval and notification channel preferences
-* Play Store release build (signing is deliberately out of this repo)
-
-## License
-
-MIT — see [`LICENSE`](LICENSE). Third-party dependencies are Apache-2.0 licensed (except as noted)
-and listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+MIT licensed: [LICENSE](LICENSE). Dependency notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).
