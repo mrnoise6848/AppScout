@@ -1,70 +1,53 @@
 # AppScout
 
-**Understand whether an installed Android app has a newer GitHub release, and what changed, without losing the last-known answer offline.**
+**Know what changed before you update.**
 
-For apps installed outside a managed store, checking updates often means finding the right repository, comparing an installed version with a release tag and reading unfamiliar release notes. A newer-looking tag alone does not explain whether a change deserves attention—and some version formats cannot be compared safely.
+Apps installed from GitHub can fall outside the usual store-update workflow. Checking them means finding each repository, comparing release tags with installed versions, and reading the notes to decide what needs attention.
 
-AppScout links a selected launcher app to a GitHub repository, caches release information and exposes both the version decision and its uncertainty. Optional AI summaries help interpret the notes; the official release remains available for review. The app does not download or install updates.
+AppScout brings that work into an Android dashboard. Link an installed app to its repository once, then review new releases, read what changed and open the official release when you are ready. Cached details remain available offline.
 
-## The update-review workflow
+## From installed app to informed update
 
-1. Select an installed launcher app and attach its GitHub repository.
-2. Refresh to compare the installed version with the published release.
-3. Read release details, or request a clearly labelled Gemini summary using your own key.
-4. Open the official release in the browser to decide what to do.
-5. Return offline: cached details remain readable, with failed checks marked stale.
+1. **Connect the source.** Choose a launcher app and attach its GitHub repository.
+2. **See where it stands.** Compare the installed version with the published release and inspect the release notes.
+3. **Read a shorter explanation if useful.** Optional Gemini summaries use your own API key and appear as advisory, AI-generated content alongside the source notes.
+4. **Act on the official release.** Open GitHub to review or obtain the update. Installation remains outside AppScout.
 
-## A useful answer includes uncertainty
+Background checks use WorkManager, with a 12-hour interval subject to Android scheduling. Notifications are deduplicated by release tag so the same release does not repeatedly demand attention.
 
-| Situation | Implemented behavior |
+## Three different answers deserve three different states
+
+| Answer | Meaning |
 |---|---|
-| Versions parse successfully | Compare numeric components and prerelease identifiers |
-| Either version cannot be parsed | Report `VERSION_COMPARISON_UNCERTAIN` |
-| A refresh fails | Preserve cached information and mark the decision stale |
-| GitHub returns HTTP 304 | Reuse the cached release through ETag revalidation |
-| Latest-release lookup cannot provide an eligible release | Fall back to the release list and filter drafts/prereleases |
-| A release was already notified | Deduplicate notifications by release tag |
+| Update available | Parsed versions indicate that the published release is newer |
+| Version comparison uncertain | A version format cannot be compared confidently |
+| Last check failed | Previously fetched information remains readable, but the refresh failed |
 
-This separation matters: “no update,” “could not compare” and “could not refresh” are different answers. See the [version comparator](app/src/main/java/com/noise/appscout/domain/version/VersionComparator.kt), [status resolver](app/src/main/java/com/noise/appscout/domain/release/ReleaseStatusResolver.kt) and [GitHub boundary](app/src/main/java/com/noise/appscout/data/remote/github/GitHubReleaseDataSource.kt).
+That distinction is central to the implementation. A network error should not erase a useful cache, and an unfamiliar version string should not become a false update notification.
 
-## One cache, two refresh paths
+The [version comparator](app/src/main/java/com/noise/appscout/domain/version/VersionComparator.kt) handles numeric components and prerelease ordering. The [status resolver](app/src/main/java/com/noise/appscout/domain/release/ReleaseStatusResolver.kt) combines that decision with installation and refresh state.
 
-```mermaid
-flowchart LR
-    UI[Foreground refresh] --> UseCases[Domain use cases]
-    Worker[WorkManager refresh] --> UseCases
-    UseCases --> GitHub[GitHub REST]
-    GitHub --> Room[Room release cache]
-    Room --> State[Observed UI state]
-    Room --> Notify[Notification decisions]
-```
+## The same refresh logic, wherever it starts
 
-Compose screens observe local state rather than rendering network responses directly. Room persists tracked sources and releases; DataStore holds settings. WorkManager submits unique, network-constrained periodic work with a 12-hour interval and `KEEP` policy. Android controls actual execution time. Shared use cases keep foreground and background refresh behavior aligned.
+Foreground refresh and background work call shared domain use cases. GitHub responses are persisted in Room before the UI observes them. Conditional requests reuse cached releases through ETags; a release-list fallback handles cases where the latest-release endpoint cannot provide an eligible result.
 
-Details: [architecture](docs/architecture.md) · [decisions](docs/decisions/).
+Compose screens consume ViewModel state, Room owns the release cache, and DataStore holds preferences. This makes offline reading part of the normal data path. [Architecture](docs/architecture.md) · [Design decisions](docs/decisions/)
 
-## Optional AI: advisory, with bounded validation
+## Build and try
 
-Gemini receives the app name and supplied release text when summaries are requested. Output is parsed as structured JSON, bounded in size and mapped to explicit failure states. A keyword check removes unsupported security-related reasons and clears the security flag when the notes lack matching terms.
-
-That check is a heuristic, **not semantic verification**: it does not prove the summary is accurate, and the summary text itself is retained. Readers should consult the original release notes. The provider and model identifier are configured in [GeminiAiSummaryProvider](app/src/main/java/com/noise/appscout/data/remote/gemini/GeminiAiSummaryProvider.kt); service/model availability is a runtime dependency.
-
-The key is encrypted using Android Keystore-backed storage. Core tracking requires no Gemini key. There is no application backend or analytics integration; GitHub checks and optional Gemini requests use network services.
-
-## Run and verify
-
-Use Android Studio and the versions declared in the Gradle files:
+Use Android Studio with the project's configured toolchain:
 
 ```bash
-./gradlew lint test assembleDebug
+./gradlew assembleDebug
+./gradlew lint test
 ```
 
-Existing JVM tests cover URL parsing, HTTP/cache responses, version uncertainty, notification deduplication, scheduling and AI output validation. [The instrumented acceptance test](app/src/androidTest/java/com/noise/appscout/TrackRealRepositoryTest.kt) needs a device and access to a public repository. Test presence is not a claim that those checks were rerun during this documentation pass.
+Attach a repository, refresh, read a release, then reopen the app offline. Existing JVM tests exercise HTTP/cache responses, version parsing, stale states, notifications, scheduling and AI validation. The [device acceptance test](app/src/androidTest/java/com/noise/appscout/TrackRealRepositoryTest.kt) also requires access to a public repository.
 
-Existing [home-screen capture](phase2_home.png) shows the empty initial state; it does not demonstrate release comparison. A populated release-detail screenshot or end-to-end recording remains a presentation gap.
+## Integration notes
 
-## Scope and limits
+Core tracking needs no Gemini key. Optional summaries send the app name and release text to Gemini; the key uses Android Keystore-backed encrypted storage. Structured-output checks bound responses, while a keyword heuristic filters some unsupported security claims. Summaries still require human judgment and do not replace the original notes.
 
-Launcher apps must be linked manually to repositories. Arbitrary download sites, automatic installation and a complete release-history browser are outside this workflow. Unusual version schemes remain uncertain; cached information can be outdated; prerelease inclusion does not guarantee discovery of the newest prerelease when the latest-release endpoint already returns an eligible stable release.
+Sources are linked manually and limited to GitHub releases. Unusual version schemes stay uncertain. Prerelease inclusion does not ensure the newest prerelease is discovered when the latest-release endpoint already returns an eligible stable release. Gemini model/service availability is an external dependency.
 
-MIT licensed: [LICENSE](LICENSE). Dependency notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).
+MIT licensed: [LICENSE](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md).
